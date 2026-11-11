@@ -1,0 +1,13 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/icons">
+        <file alias="sysmon-16.png">icons/sysmon-16.png</file>
+        <file alias="sysmon-22.png">icons/sysmon-22.png</file>
+        <file alias="sysmon-24.png">icons/sysmon-24.png</file>
+        <file alias="sysmon-32.png">icons/sysmon-32.png</file>
+        <file alias="sysmon-48.png">icons/sysmon-48.png</file>
+        <file alias="sysmon-64.png">icons/sysmon-64.png</file>
+        <file alias="sysmon-128.png">icons/sysmon-128.png</file>
+        <file alias="sysmon-256.png">icons/sysmon-256.png</file>
+    </qresource>
+</RCC>

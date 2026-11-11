@@ -1,4 +1,8 @@
-# sysmon
+<p align="center">
+  <img src="data/icons/sysmon.svg" alt="Sysmon logo" width="128" height="128">
+</p>
+
+<h1 align="center">Sysmon</h1>
 
 A system monitor for Linux written in C++17 with Qt Widgets (Qt 6, or Qt 5.15).
 No dependencies besides Qt: the graphs are drawn with QPainter and all data
@@ -21,7 +25,8 @@ cmake --build build -j
 ./build/sysmon
 ```
 
-Optional: `sudo cmake --install build` installs the binary and a menu entry.
+Optional: `sudo cmake --install build` installs the binary, a menu entry and
+the icon.
 
 ## Packages
 
@@ -172,4 +177,5 @@ source/             Qt interface
   servicestab       systemd services
   samplerworker     runs the backend on its own thread
 tests/backend_dump  console tool
+data/icons/         logo: sysmon.svg is the source, the PNGs are rendered from it
 ```

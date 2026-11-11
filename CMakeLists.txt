@@ -38,6 +38,7 @@ endif()
 # ---- Qt application (Qt 6, or Qt 5.15 if Qt 6 is not installed) -------------
 if(SYSMON_BUILD_GUI)
     set(CMAKE_AUTOMOC ON)
+    set(CMAKE_AUTORCC ON)
     find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
     find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
 
@@ -52,6 +53,7 @@ if(SYSMON_BUILD_GUI)
         source/processtab.h        source/processtab.cpp
         source/servicestab.h       source/servicestab.cpp
         source/mainwindow.h        source/mainwindow.cpp
+        data/sysmon.qrc
     )
     target_link_libraries(sysmon PRIVATE sysbackend Qt${QT_VERSION_MAJOR}::Widgets)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -61,6 +63,13 @@ if(SYSMON_BUILD_GUI)
     include(GNUInstallDirs)
     install(TARGETS sysmon RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     install(FILES sysmon.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+    foreach(size 16 22 24 32 48 64 128 256 512)
+        install(FILES data/icons/sysmon-${size}.png
+                DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/${size}x${size}/apps
+                RENAME sysmon.png)
+    endforeach()
+    install(FILES data/icons/sysmon.svg
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
         install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/sysmon)
     endif()

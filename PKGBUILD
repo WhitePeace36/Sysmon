@@ -22,7 +22,7 @@ pkgdesc='System monitor with performance graphs, process lists and systemd servi
 arch=('x86_64' 'aarch64')
 url='https://github.com/WhitePeace36/Sysmon'
 license=('GPL-2.0-only')
-depends=('qt6-base' 'gcc-libs' 'glibc')
+depends=('qt6-base' 'gcc-libs' 'glibc' 'hicolor-icon-theme')
 makedepends=('cmake')
 optdepends=(
     'polkit: signal processes and manage services that need administrator rights'

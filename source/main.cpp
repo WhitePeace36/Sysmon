@@ -30,7 +30,12 @@ int main(int argc, char** argv)
     QApplication::setApplicationName(QStringLiteral("sysmon"));
     QApplication::setDesktopFileName(QStringLiteral("sysmon"));  // ties the window to sysmon.desktop
     QApplication::setApplicationDisplayName(QObject::tr("System Monitor"));
-    QApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("utilities-system-monitor")));
+    // The logo is compiled in (data/sysmon.qrc), so the window shows it even
+    // when the program runs straight from the build directory.
+    QIcon logo;
+    for (int size : {16, 22, 24, 32, 48, 64, 128, 256})
+        logo.addFile(QStringLiteral(":/icons/sysmon-%1.png").arg(size), QSize(size, size));
+    QApplication::setWindowIcon(logo);
 
     // Snapshots cross from the sampling thread to the GUI thread.
     qRegisterMetaType<SnapshotPtr>("SnapshotPtr");

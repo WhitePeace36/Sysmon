@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>Sysmon</title>
+  <rect width="256" height="256" rx="56" fill="#0b1320"/>
+  <path d="M36 176 L84 134 L124 158 L172 81 L220 107 L220 208 L36 208 Z" fill="#1f3b5a"/>
+  <g stroke="#8fb0d6" stroke-opacity="0.14" stroke-width="8" stroke-linecap="round">
+    <line x1="32" y1="88" x2="224" y2="88"/>
+    <line x1="32" y1="152" x2="224" y2="152"/>
+  </g>
+  <polyline points="35,177 84,134 124,158 172,81 221,108" fill="none" stroke="#4ba3e3" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
