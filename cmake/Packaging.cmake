@@ -49,6 +49,8 @@ set(CPACK_RPM_PACKAGE_RELEASE_DIST ON)
 set(CPACK_RPM_PACKAGE_LICENSE "GPL-2.0-only")
 # Library dependencies are found by rpmbuild itself (AutoReq is on by default).
 set(CPACK_RPM_PACKAGE_SUGGESTS "polkit, hwdata")
+# Works around a CMake 3.x bug that drops the Suggests line; see the file.
+set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_CURRENT_LIST_DIR}/CPackProjectConfig.cmake")
 # These directories belong to the "filesystem" package. Without this the RPM
 # would claim them too and fail to install with a file conflict.
 set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
