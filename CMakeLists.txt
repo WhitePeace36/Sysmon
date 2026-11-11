@@ -1,0 +1,64 @@
+cmake_minimum_required(VERSION 3.16)
+project(sysmon VERSION 1.0.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
+option(SYSMON_BUILD_GUI  "Build the Qt application" ON)
+option(SYSMON_BUILD_DUMP "Build sysmon-dump, a console tool that prints what the backend reads" OFF)
+
+find_package(Threads REQUIRED)
+
+# ---- Backend: plain C++, no Qt ---------------------------------------------
+add_library(sysbackend STATIC
+    src/sys/sysinfo.h
+    src/sys/internal.h
+    src/sys/util.h
+    src/sys/util.cpp
+    src/sys/sampler.cpp
+    src/sys/procs.cpp
+    src/sys/gpu.cpp
+)
+target_include_directories(sysbackend PUBLIC src)
+target_link_libraries(sysbackend PUBLIC ${CMAKE_DL_LIBS} Threads::Threads)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(sysbackend PRIVATE -Wall -Wextra)
+endif()
+
+if(SYSMON_BUILD_DUMP)
+    add_executable(sysmon-dump tests/backend_dump.cpp)
+    target_link_libraries(sysmon-dump PRIVATE sysbackend)
+endif()
+
+# ---- Qt application (Qt 6, or Qt 5.15 if Qt 6 is not installed) -------------
+if(SYSMON_BUILD_GUI)
+    set(CMAKE_AUTOMOC ON)
+    find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
+    find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
+
+    add_executable(sysmon
+        src/main.cpp
+        src/format.h            src/format.cpp
+        src/samplerworker.h     src/samplerworker.cpp
+        src/graphwidget.h       src/graphwidget.cpp
+        src/performancetab.h    src/performancetab.cpp
+        src/typeaheadview.h     src/typeaheadview.cpp
+        src/processmodel.h      src/processmodel.cpp
+        src/processtab.h        src/processtab.cpp
+        src/servicestab.h       src/servicestab.cpp
+        src/mainwindow.h        src/mainwindow.cpp
+    )
+    target_link_libraries(sysmon PRIVATE sysbackend Qt${QT_VERSION_MAJOR}::Widgets)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(sysmon PRIVATE -Wall -Wextra)
+    endif()
+
+    include(GNUInstallDirs)
+    install(TARGETS sysmon RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    install(FILES sysmon.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+endif()

@@ -1,0 +1,5 @@
+set(__QT_DEPLOY_TARGETS "sysbackend;sysmon")
+set(__QT_DEPLOY_TARGET_sysbackend_FILE /run/media/timon/e/git_repos/Sysmon/build/libsysbackend.a)
+set(__QT_DEPLOY_TARGET_sysbackend_TYPE STATIC_LIBRARY)
+set(__QT_DEPLOY_TARGET_sysmon_FILE /run/media/timon/e/git_repos/Sysmon/build/sysmon)
+set(__QT_DEPLOY_TARGET_sysmon_TYPE EXECUTABLE)

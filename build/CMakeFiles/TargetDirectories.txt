@@ -1,0 +1,10 @@
+/run/media/timon/e/git_repos/Sysmon/build/CMakeFiles/sysbackend.dir
+/run/media/timon/e/git_repos/Sysmon/build/CMakeFiles/sysmon.dir
+/run/media/timon/e/git_repos/Sysmon/build/CMakeFiles/edit_cache.dir
+/run/media/timon/e/git_repos/Sysmon/build/CMakeFiles/rebuild_cache.dir
+/run/media/timon/e/git_repos/Sysmon/build/CMakeFiles/list_install_components.dir
+/run/media/timon/e/git_repos/Sysmon/build/CMakeFiles/install.dir
+/run/media/timon/e/git_repos/Sysmon/build/CMakeFiles/install/local.dir
+/run/media/timon/e/git_repos/Sysmon/build/CMakeFiles/install/strip.dir
+/run/media/timon/e/git_repos/Sysmon/build/CMakeFiles/sysmon_autogen_timestamp_deps.dir
+/run/media/timon/e/git_repos/Sysmon/build/CMakeFiles/sysmon_autogen.dir

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Sysmon
+GenericName=System Monitor
+Comment=Performance graphs, processes and systemd services
+Exec=sysmon
+Icon=utilities-system-monitor
+Terminal=false
+Categories=System;Monitor;Qt;
+Keywords=process;task;manager;cpu;gpu;memory;network;disk;services;systemd;
