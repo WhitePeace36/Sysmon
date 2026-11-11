@@ -23,6 +23,37 @@ cmake --build build -j
 
 Optional: `sudo cmake --install build` installs the binary and a menu entry.
 
+## Packages
+
+**Arch Linux** (needs `base-devel` and `cmake`), from the project root:
+
+```sh
+makepkg -si
+```
+
+The build happens in `build/makepkg/` inside the checkout; the finished
+`sysmon-*.pkg.tar.zst` is written next to the PKGBUILD.
+
+**Debian / Ubuntu** (needs `dpkg-dev`, part of `build-essential`):
+
+```sh
+cmake -S . -B build && cmake --build build -j
+cd build && cpack -G DEB
+sudo apt install ./sysmon_*.deb
+```
+
+**Fedora** (needs `rpm-build`):
+
+```sh
+cmake -S . -B build && cmake --build build -j
+cd build && cpack -G RPM
+sudo dnf install ./sysmon-*.rpm
+```
+
+Library dependencies are worked out from the built binary, so a package fits
+the distribution release it was built on. The package settings are in
+`cmake/Packaging.cmake`.
+
 ## Tabs
 
 ### Performance
@@ -128,11 +159,11 @@ prints three samples of everything the backend reads. Add
 ## Layout
 
 ```
-src/sys/            backend, plain C++ without Qt
+source/sys/         backend, plain C++ without Qt
   sampler.cpp       CPU, memory, disks, adapters, sensors
   procs.cpp         process table, per-process network and GPU
   gpu.cpp           NVML and DRM sysfs
-src/                Qt interface
+source/             Qt interface
   graphwidget       scrolling line graph
   performancetab    device list and pages
   processmodel      models for Processes and Details, sorting and filtering

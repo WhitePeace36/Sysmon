@@ -1,0 +1,13 @@
+# CMake build directories (makepkg also works in build/makepkg)
+/build/
+/build-*/
+
+# makepkg's default scratch directories, used when BUILDDIR is overridden
+/src/
+/pkg/
+
+# Finished packages
+*.pkg.tar.*
+*.deb
+*.rpm
+*.tar.gz

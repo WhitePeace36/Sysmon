@@ -1,6 +1,6 @@
 // Data model and public entry point of the sampling backend.
 //
-// Everything in src/sys is plain C++17 with no Qt dependency. A Sampler is
+// Everything in source/sys is plain C++17 with no Qt dependency. A Sampler is
 // polled periodically and returns an immutable Snapshot that the UI renders.
 #pragma once
 

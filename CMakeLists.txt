@@ -16,15 +16,15 @@ find_package(Threads REQUIRED)
 
 # ---- Backend: plain C++, no Qt ---------------------------------------------
 add_library(sysbackend STATIC
-    src/sys/sysinfo.h
-    src/sys/internal.h
-    src/sys/util.h
-    src/sys/util.cpp
-    src/sys/sampler.cpp
-    src/sys/procs.cpp
-    src/sys/gpu.cpp
+    source/sys/sysinfo.h
+    source/sys/internal.h
+    source/sys/util.h
+    source/sys/util.cpp
+    source/sys/sampler.cpp
+    source/sys/procs.cpp
+    source/sys/gpu.cpp
 )
-target_include_directories(sysbackend PUBLIC src)
+target_include_directories(sysbackend PUBLIC source)
 target_link_libraries(sysbackend PUBLIC ${CMAKE_DL_LIBS} Threads::Threads)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(sysbackend PRIVATE -Wall -Wextra)
@@ -42,16 +42,16 @@ if(SYSMON_BUILD_GUI)
     find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
 
     add_executable(sysmon
-        src/main.cpp
-        src/format.h            src/format.cpp
-        src/samplerworker.h     src/samplerworker.cpp
-        src/graphwidget.h       src/graphwidget.cpp
-        src/performancetab.h    src/performancetab.cpp
-        src/typeaheadview.h     src/typeaheadview.cpp
-        src/processmodel.h      src/processmodel.cpp
-        src/processtab.h        src/processtab.cpp
-        src/servicestab.h       src/servicestab.cpp
-        src/mainwindow.h        src/mainwindow.cpp
+        source/main.cpp
+        source/format.h            source/format.cpp
+        source/samplerworker.h     source/samplerworker.cpp
+        source/graphwidget.h       source/graphwidget.cpp
+        source/performancetab.h    source/performancetab.cpp
+        source/typeaheadview.h     source/typeaheadview.cpp
+        source/processmodel.h      source/processmodel.cpp
+        source/processtab.h        source/processtab.cpp
+        source/servicestab.h       source/servicestab.cpp
+        source/mainwindow.h        source/mainwindow.cpp
     )
     target_link_libraries(sysmon PRIVATE sysbackend Qt${QT_VERSION_MAJOR}::Widgets)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -61,4 +61,10 @@ if(SYSMON_BUILD_GUI)
     include(GNUInstallDirs)
     install(TARGETS sysmon RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     install(FILES sysmon.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+        install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/sysmon)
+    endif()
+
+    # .deb (Debian, Ubuntu) and .rpm (Fedora) packages: run `cpack` in the build directory.
+    include(cmake/Packaging.cmake)
 endif()
