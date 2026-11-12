@@ -111,11 +111,17 @@ void ServiceModel::setRows(const QVector<ServiceRow>& rows)
     for (int i = 0; i < rows.size(); ++i)
         incoming.insert(rows.at(i).unit, i);
 
+    // Remove vanished units as contiguous ranges from the back; switching the
+    // scope empties the whole list, which would otherwise be hundreds of
+    // single-row removals, each re-processed by the sort proxy.
     for (int i = m_rows.size() - 1; i >= 0; --i) {
         if (incoming.contains(m_rows.at(i).unit))
             continue;
-        beginRemoveRows(QModelIndex(), i, i);
-        m_rows.removeAt(i);
+        const int last = i;
+        while (i > 0 && !incoming.contains(m_rows.at(i - 1).unit))
+            --i;
+        beginRemoveRows(QModelIndex(), i, last);
+        m_rows.erase(m_rows.begin() + i, m_rows.begin() + last + 1);
         endRemoveRows();
     }
 
@@ -223,10 +229,14 @@ ServicesTab::ServicesTab(QWidget* parent) : QWidget(parent)
     connect(m_filter, &QLineEdit::textChanged, m_proxy, &RowSortProxy::setFilterText);
     connect(m_scope, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) {
         m_loading = false;  // abandon a reply for the other scope
+        ++m_generation;     // ... and make sure it is dropped when it arrives
         m_model->setRows(QVector<ServiceRow>());
         m_status->clear();
         m_statusUnit.clear();
-        reload();
+        // restoreState() changes the scope at start-up while the tab may be
+        // hidden; showEvent() loads the list once the tab is actually opened.
+        if (isVisible())
+            reload();
     });
     connect(m_view, &QWidget::customContextMenuRequested, this, &ServicesTab::showContextMenu);
     connect(m_view->selectionModel(), &QItemSelectionModel::currentRowChanged, this, &ServicesTab::onCurrentChanged);

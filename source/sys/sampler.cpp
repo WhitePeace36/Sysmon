@@ -46,6 +46,7 @@ struct DiskStatic {
 struct NetPrev {
     uint64_t rx = 0, tx = 0;
     bool valid = false;
+    std::string type;  // determined once per interface, it does not change
 };
 
 struct NetAddr {
@@ -210,6 +211,7 @@ struct Sampler::Impl {
     // Disks, network, mounts
     std::map<std::string, DiskPrev> diskPrev;
     std::map<std::string, DiskStatic> diskStatic;
+    std::set<std::string> partitions;  // /proc/diskstats entries without /sys/block/<name>
     std::map<std::string, NetPrev> netPrev;
     std::map<std::string, NetAddr> netAddr;
     std::vector<MountStats> mounts;
@@ -418,7 +420,7 @@ void Sampler::Impl::sampleDisks(double dt, std::vector<DiskStats>& out)
 {
     std::string text;
     readFile("/proc/diskstats", text);
-    std::set<std::string> seen;
+    std::set<std::string> seen, partitionsSeen;
     for (const std::string& line : splitLines(text)) {
         const std::vector<std::string> f = splitWs(line);
         if (f.size() < 14)
@@ -430,8 +432,12 @@ void Sampler::Impl::sampleDisks(double dt, std::vector<DiskStats>& out)
 
         auto st = diskStatic.find(name);
         if (st == diskStatic.end()) {
-            if (!pathExists(sysDir))
-                continue;  // a partition, not a whole disk
+            // A partition, not a whole disk. Remembered so that each one does
+            // not cost a stat() on every sample.
+            if (partitions.count(name) || !pathExists(sysDir)) {
+                partitionsSeen.insert(name);
+                continue;
+            }
             DiskStatic info;
             long long v = 0;
             if (readNumber(sysDir + "/size", v))
@@ -485,6 +491,7 @@ void Sampler::Impl::sampleDisks(double dt, std::vector<DiskStats>& out)
         prev.valid = true;
         out.push_back(d);
     }
+    partitions.swap(partitionsSeen);  // forget partitions that went away
     for (auto it = diskPrev.begin(); it != diskPrev.end();) {
         if (seen.count(it->first)) {
             ++it;
@@ -533,12 +540,15 @@ void Sampler::Impl::sampleNets(double dt, std::vector<NetStats>& out)
         long long speed = 0;
         if (readNumber(sysDir + "/speed", speed) && speed > 0)
             n.speedMbps = static_cast<int>(speed);
-        if (pathExists(sysDir + "/wireless") || pathExists(sysDir + "/phy80211"))
-            n.type = "Wi-Fi";
-        else if (pathExists(sysDir + "/device"))
-            n.type = "Ethernet";
-        else
-            n.type = "Virtual";
+        if (prev.type.empty()) {
+            if (pathExists(sysDir + "/wireless") || pathExists(sysDir + "/phy80211"))
+                prev.type = "Wi-Fi";
+            else if (pathExists(sysDir + "/device"))
+                prev.type = "Ethernet";
+            else
+                prev.type = "Virtual";
+        }
+        n.type = prev.type;
         const auto addr = netAddr.find(name);
         if (addr != netAddr.end()) {
             n.ipv4 = addr->second.ipv4;
@@ -643,7 +653,9 @@ void Sampler::Impl::sampleSensors(Snapshot& s)
     }
     if (!has(s.cpu.tempC) && !cpuThermalZone.empty()) {
         long long raw = 0;
-        if (readNumber(cpuThermalZone, raw)) {
+        // Same plausibility check as for hwmon: some zones report -273 °C or
+        // other junk when the sensor is absent or not ready.
+        if (readNumber(cpuThermalZone, raw) && raw > -40000 && raw < 200000) {
             s.cpu.tempC = raw / 1000.0;
             s.cpu.tempSource = "thermal zone";
         }

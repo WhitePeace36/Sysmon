@@ -55,6 +55,7 @@ struct PidState {
     bool fresh = true;
 
     bool ioOk = false;
+    bool ioDenied = false;  // /proc/<pid>/io could not be read last time
     uint64_t ioRead = 0, ioWrite = 0;
 
     std::string comm, name, cmdline, user;
@@ -363,9 +364,11 @@ bool ProcScanner::Impl::readProcess(int pid, double dt, ProcStats& p, PidState*&
         p.cpuPct = double(ticks - st.cpuTicks) / double(clkTck) / dt * 100.0;
     st.cpuTicks = ticks;
 
+    bool identityRefreshed = false;
     if (st.comm != f.comm || --st.refreshIn <= 0) {
         st.comm = f.comm;
         refreshIdentity(pid, st);
+        identityRefreshed = true;
     }
 
     p.pid = pid;
@@ -391,9 +394,13 @@ bool ProcScanner::Impl::readProcess(int pid, double dt, ProcStats& p, PidState*&
         }
     }
 
-    // Only readable for our own processes (or as root).
+    // Only readable for our own processes (or as root). Most processes of a
+    // desktop belong to other users, so after a refusal the file is tried
+    // again only when the identity is re-read (exec, or every few samples).
     std::snprintf(path, sizeof path, "/proc/%d/io", pid);
-    if (readFile(path, text, 1024) && !text.empty()) {
+    const bool tryIo = !st.ioDenied || identityRefreshed;
+    if (tryIo && readFile(path, text, 1024) && !text.empty()) {
+        st.ioDenied = false;
         const uint64_t rd = fieldAfter(text, "\nread_bytes:");
         const uint64_t wr = fieldAfter(text, "\nwrite_bytes:");
         if (st.ioOk && !st.fresh && dt > 0) {
@@ -406,6 +413,8 @@ bool ProcScanner::Impl::readProcess(int pid, double dt, ProcStats& p, PidState*&
         st.ioWrite = wr;
         st.ioOk = true;
     } else {
+        if (tryIo)
+            st.ioDenied = true;
         st.ioOk = false;
     }
 

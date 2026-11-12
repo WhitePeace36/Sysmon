@@ -307,14 +307,26 @@ void GpuMonitor::Impl::sampleNvml(std::vector<GpuStats>& out)
                 count = static_cast<unsigned int>(samples.size());
                 rc = nvml.getProcUtil(dev, samples.data(), &count, nvml.lastStamp[i]);
                 if (rc == kNvmlSuccess) {
+                    // The buffer holds every sample taken since lastStamp, so a
+                    // process usually appears several times (and on the very
+                    // first call, with the whole history). Average its samples
+                    // on this device instead of adding them up.
+                    std::unordered_map<int, std::pair<double, int>> perPid;  // sum, samples
                     for (unsigned int k = 0; k < count && k < samples.size(); ++k) {
-                        freshUtil[static_cast<int>(samples[k].pid)] += samples[k].smUtil;
+                        auto& acc = perPid[static_cast<int>(samples[k].pid)];
+                        acc.first += samples[k].smUtil;
+                        ++acc.second;
                         nvml.lastStamp[i] = std::max(nvml.lastStamp[i], samples[k].timeStamp);
                     }
+                    for (const auto& p : perPid)
+                        freshUtil[p.first] += p.second.first / p.second.second;
                 }
             }
         }
 
+        // A process that does compute and graphics work ("C+G") is listed by
+        // both calls with the same allocation, so take it once per device.
+        std::unordered_map<int, unsigned long long> memOnDevice;
         typedef int (*ListFn)(nvmlDevice_t, unsigned int*, nvmlProcessInfo_t*);
         const ListFn lists[] = {nvml.getCompute, nvml.getGraphics};
         for (ListFn fn : lists) {
@@ -331,9 +343,12 @@ void GpuMonitor::Impl::sampleNvml(std::vector<GpuStats>& out)
             for (unsigned int k = 0; k < count && k < infos.size(); ++k) {
                 if (infos[k].usedGpuMemory == ~0ULL)
                     continue;  // "not available"
-                procUse[static_cast<int>(infos[k].pid)].memBytes += infos[k].usedGpuMemory;
+                unsigned long long& bytes = memOnDevice[static_cast<int>(infos[k].pid)];
+                bytes = std::max(bytes, infos[k].usedGpuMemory);
             }
         }
+        for (const auto& m : memOnDevice)
+            procUse[m.first].memBytes += m.second;
     }
 
     for (const auto& u : freshUtil) {
@@ -356,6 +371,15 @@ void GpuMonitor::Impl::sampleCard(const DrmCard& c, const std::map<std::string, 
     g.id = c.card;
     g.name = c.name;
     g.driver = c.driver;
+
+    // A GPU in runtime suspend (typically the discrete GPU of a laptop) is
+    // woken up by reading most of its sysfs and hwmon attributes, so polling
+    // it every second would keep it powered forever. power/runtime_status is
+    // kept by the PM core and can be read without waking the device.
+    if (readLine(c.devDir + "/power/runtime_status") == "suspended") {
+        g.usage = 0;
+        return;
+    }
 
     long long v = 0;
     if (readNumber(c.devDir + "/gpu_busy_percent", v)) {

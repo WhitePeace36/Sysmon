@@ -235,6 +235,8 @@ QVariant procRowData(const ProcRow& r, int column, int role)
             return QVariant();
         }
     }
+    if (role == TieBreakRole)
+        return r.pids.isEmpty() ? 0 : r.pids.first();  // group PIDs are sorted, so this is the lowest
     if (role == PidsRole) {
         QVariantList pids;
         for (int pid : r.pids)
@@ -507,11 +509,9 @@ bool RowSortProxy::lessThan(const QModelIndex& left, const QModelIndex& right) c
         if (x != y)
             return x < y;
     }
-    const QVariantList leftPids = left.data(PidsRole).toList();
-    const QVariantList rightPids = right.data(PidsRole).toList();
-    const int lp = leftPids.isEmpty() ? 0 : leftPids.first().toInt();
-    const int rp = rightPids.isEmpty() ? 0 : rightPids.first().toInt();
-    return lp < rp;
+    // Ties are common (most processes sit at 0.0 % CPU) and the proxy re-sorts
+    // on every refresh, so this must not build a QVariantList per comparison.
+    return left.data(TieBreakRole).toInt() < right.data(TieBreakRole).toInt();
 }
 
 bool RowSortProxy::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const

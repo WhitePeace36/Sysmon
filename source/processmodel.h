@@ -47,8 +47,9 @@ QString title(int column);
 }  // namespace ProcColumns
 
 enum ProcRoles {
-    SortRole = Qt::UserRole,     // raw value used for ordering
-    PidsRole = Qt::UserRole + 1  // QVariantList of the PIDs behind a row
+    SortRole = Qt::UserRole,          // raw value used for ordering
+    PidsRole = Qt::UserRole + 1,      // QVariantList of the PIDs behind a row
+    TieBreakRole = Qt::UserRole + 2   // int: lowest PID of the row, orders equal rows
 };
 
 // One displayed row: a single process, or the sum of a group of processes.
