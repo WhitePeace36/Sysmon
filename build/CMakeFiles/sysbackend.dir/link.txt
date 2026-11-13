@@ -1,2 +1,0 @@
-/usr/bin/ar qc libsysbackend.a CMakeFiles/sysbackend.dir/src/sys/util.cpp.o CMakeFiles/sysbackend.dir/src/sys/sampler.cpp.o CMakeFiles/sysbackend.dir/src/sys/procs.cpp.o CMakeFiles/sysbackend.dir/src/sys/gpu.cpp.o
-/usr/bin/ranlib libsysbackend.a

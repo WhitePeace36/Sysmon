@@ -1,7 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"/run/media/timon/e/git_repos/Sysmon/build/cmake_install.cmake"
-	],
-	"Parallel" : false
-}
