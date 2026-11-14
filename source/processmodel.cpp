@@ -57,63 +57,6 @@ QString rateOrBlank(double value)
     return value < 0 ? QString() : Format::rate(value);
 }
 
-// Sum of the members of a program group.
-ProcRow summarize(const QString& name, const QVector<int>& members, const QVector<ProcRow>& rows)
-{
-    if (members.size() == 1) {
-        ProcRow single = rows.at(members.first());
-        single.group = false;
-        return single;
-    }
-    ProcRow sum;
-    sum.name = name;
-    sum.group = true;
-    sum.cpu = 0;
-    bool anyGpu = false, anyNet = false, anyDisk = false, sameUser = true;
-    double gpu = 0, netRx = 0, netTx = 0, diskRead = 0, diskWrite = 0;
-    for (int idx : members) {
-        const ProcRow& r = rows.at(idx);
-        sum.pids.append(r.pid);
-        if (sum.user.isEmpty())
-            sum.user = r.user;
-        else if (sum.user != r.user)
-            sameUser = false;
-        sum.cpu += r.cpu;
-        sum.memory += r.memory;
-        sum.resident += r.resident;
-        sum.gpuMem += r.gpuMem;
-        sum.threads += r.threads;
-        if (r.gpu >= 0) {
-            anyGpu = true;
-            gpu += r.gpu;
-        }
-        if (r.netRx >= 0) {
-            anyNet = true;
-            netRx += r.netRx;
-            netTx += r.netTx;
-        }
-        if (r.diskRead >= 0) {
-            anyDisk = true;
-            diskRead += r.diskRead;
-            diskWrite += r.diskWrite;
-        }
-    }
-    std::sort(sum.pids.begin(), sum.pids.end());
-    if (!sameUser)
-        sum.user = QCoreApplication::translate("ProcColumns", "(several)");
-    if (anyGpu)
-        sum.gpu = gpu;
-    if (anyNet) {
-        sum.netRx = netRx;
-        sum.netTx = netTx;
-    }
-    if (anyDisk) {
-        sum.diskRead = diskRead;
-        sum.diskWrite = diskWrite;
-    }
-    return sum;
-}
-
 }  // namespace
 
 QVector<ProcRow> ProcRow::fromSnapshot(const sys::Snapshot& snapshot, bool showKernelThreads, bool perCoreCpu)
@@ -149,6 +92,21 @@ QVector<ProcRow> ProcRow::fromSnapshot(const sys::Snapshot& snapshot, bool showK
         r.priority = p.priority;
         r.policy = p.policy;
         r.threads = p.threads;
+        r.threadRows.reserve(p.threadList.size());
+        for (const sys::ThreadStats& t : p.threadList) {
+            ProcRow tr;
+            tr.thread = true;
+            tr.pid = t.tid;  // no pids: signals go to processes, not threads
+            tr.ppid = p.pid;
+            tr.name = QString::fromStdString(t.name);
+            tr.user = r.user;
+            tr.state = t.state;
+            tr.cpu = t.cpuPct / cpuDivisor;
+            tr.nice = t.nice;
+            tr.priority = t.priority;
+            tr.policy = t.policy;
+            r.threadRows.push_back(tr);
+        }
         rows.append(r);
     }
     return rows;
@@ -158,26 +116,26 @@ QVariant procRowData(const ProcRow& r, int column, int role)
 {
     if (role == Qt::DisplayRole) {
         switch (column) {
-        case Name: return r.group ? QStringLiteral("%1 (%2)").arg(r.name).arg(r.pids.size()) : r.name;
+        case Name: return r.name;
         case Pid: return r.pid >= 0 ? QString::number(r.pid) : QString();
         case User: return r.user;
-        case State: return r.group ? QString() : Format::procState(r.state);
+        case State: return Format::procState(r.state);
         case Cpu: return QString::number(r.cpu, 'f', 1);
         case Gpu: return r.gpu < 0 ? QString() : QString::number(r.gpu, 'f', 1);
         case GpuMem: return r.gpuMem > 0 ? Format::bytes(r.gpuMem) : QString();
-        case Memory: return Format::bytes(r.memory);
-        case Resident: return Format::bytes(r.resident);
+        case Memory: return r.thread ? QString() : Format::bytes(r.memory);
+        case Resident: return r.thread ? QString() : Format::bytes(r.resident);
         case Network: return r.netRx < 0 ? QString() : Format::rate(r.netRx + r.netTx);
         case NetRx: return rateOrBlank(r.netRx);
         case NetTx: return rateOrBlank(r.netTx);
         case Disk: return r.diskRead < 0 ? QString() : Format::rate(r.diskRead + r.diskWrite);
         case DiskRead: return rateOrBlank(r.diskRead);
         case DiskWrite: return rateOrBlank(r.diskWrite);
-        case Nice: return r.group ? QString() : QString::number(r.nice);
-        case Priority: return r.group ? QString() : Format::priority(r.priority);
-        case Sched: return r.group ? QString() : Format::schedPolicy(r.policy);
-        case Threads: return QString::number(r.threads);
-        case Ppid: return r.group ? QString() : QString::number(r.ppid);
+        case Nice: return QString::number(r.nice);
+        case Priority: return Format::priority(r.priority);
+        case Sched: return Format::schedPolicy(r.policy);
+        case Threads: return r.thread ? QString() : QString::number(r.threads);
+        case Ppid: return QString::number(r.ppid);
         case Command: return r.command;
         default: return QVariant();
         }
@@ -187,7 +145,7 @@ QVariant procRowData(const ProcRow& r, int column, int role)
         case Name: return r.name;
         case Pid: return r.pid;
         case User: return r.user;
-        case State: return r.group ? QString() : Format::procState(r.state);
+        case State: return Format::procState(r.state);
         case Cpu: return r.cpu;
         case Gpu: return r.gpu;
         case GpuMem: return r.gpuMem;
@@ -201,7 +159,7 @@ QVariant procRowData(const ProcRow& r, int column, int role)
         case DiskWrite: return r.diskWrite;
         case Nice: return r.nice;
         case Priority: return r.priority;
-        case Sched: return r.group ? QString() : Format::schedPolicy(r.policy);
+        case Sched: return Format::schedPolicy(r.policy);
         case Threads: return r.threads;
         case Ppid: return r.ppid;
         case Command: return r.command;
@@ -210,6 +168,11 @@ QVariant procRowData(const ProcRow& r, int column, int role)
     }
     if (role == Qt::TextAlignmentRole)
         return isTextColumn(column) ? int(Qt::AlignLeft | Qt::AlignVCenter) : int(Qt::AlignRight | Qt::AlignVCenter);
+    if (role == Qt::ToolTipRole && r.thread) {
+        if (column == Name || column == Pid)
+            return QCoreApplication::translate("ProcColumns", "Thread %1 of PID %2").arg(r.pid).arg(r.ppid);
+        return QVariant();
+    }
     if (role == Qt::ToolTipRole) {
         switch (column) {
         case Name:
@@ -236,7 +199,7 @@ QVariant procRowData(const ProcRow& r, int column, int role)
         }
     }
     if (role == TieBreakRole)
-        return r.pids.isEmpty() ? 0 : r.pids.first();  // group PIDs are sorted, so this is the lowest
+        return r.pid;
     if (role == PidsRole) {
         QVariantList pids;
         for (int pid : r.pids)
@@ -247,91 +210,21 @@ QVariant procRowData(const ProcRow& r, int column, int role)
 }
 
 // ---------------------------------------------------------------------------
-// ProcessTableModel
-// ---------------------------------------------------------------------------
-
-ProcessTableModel::ProcessTableModel(QObject* parent) : QAbstractTableModel(parent) {}
-
-int ProcessTableModel::rowCount(const QModelIndex& parent) const
-{
-    return parent.isValid() ? 0 : m_rows.size();
-}
-
-int ProcessTableModel::columnCount(const QModelIndex& parent) const
-{
-    return parent.isValid() ? 0 : int(Count);
-}
-
-QVariant ProcessTableModel::data(const QModelIndex& index, int role) const
-{
-    if (!index.isValid() || index.row() < 0 || index.row() >= m_rows.size())
-        return QVariant();
-    return procRowData(m_rows.at(index.row()), index.column(), role);
-}
-
-QVariant ProcessTableModel::headerData(int section, Qt::Orientation orientation, int role) const
-{
-    if (orientation == Qt::Horizontal && role == Qt::DisplayRole)
-        return title(section);
-    return QVariant();
-}
-
-void ProcessTableModel::setRows(const QVector<ProcRow>& rows)
-{
-    QHash<int, int> incoming;  // pid -> index in rows
-    incoming.reserve(rows.size());
-    for (int i = 0; i < rows.size(); ++i)
-        incoming.insert(rows.at(i).pid, i);
-
-    // Remove processes that exited, as contiguous ranges from the back.
-    for (int i = m_rows.size() - 1; i >= 0; --i) {
-        if (incoming.contains(m_rows.at(i).pid))
-            continue;
-        const int last = i;
-        while (i > 0 && !incoming.contains(m_rows.at(i - 1).pid))
-            --i;
-        beginRemoveRows(QModelIndex(), i, last);
-        m_rows.erase(m_rows.begin() + i, m_rows.begin() + last + 1);
-        endRemoveRows();
-    }
-
-    // Refresh the survivors in place.
-    QSet<int> present;
-    present.reserve(m_rows.size());
-    for (ProcRow& row : m_rows) {
-        present.insert(row.pid);
-        row = rows.at(incoming.value(row.pid));
-    }
-    if (!m_rows.isEmpty())
-        emit dataChanged(index(0, 0), index(m_rows.size() - 1, Count - 1));
-
-    // Append new processes; the proxy model sorts them into place.
-    QVector<ProcRow> fresh;
-    for (const ProcRow& row : rows)
-        if (!present.contains(row.pid))
-            fresh.append(row);
-    if (!fresh.isEmpty()) {
-        beginInsertRows(QModelIndex(), m_rows.size(), m_rows.size() + fresh.size() - 1);
-        m_rows += fresh;
-        endInsertRows();
-    }
-}
-
-// ---------------------------------------------------------------------------
 // ProcessTreeModel
 // ---------------------------------------------------------------------------
 
+// A process row with its threads.
 struct ProcessTreeModel::Group {
-    QString key;
+    int pid = 0;
     int row = 0;
-    ProcRow summary;
-    QVector<ProcRow> children;  // empty while the program has a single process
+    ProcRow process;
+    QVector<ProcRow> threads;  // empty for a single-threaded process
 };
 
 ProcessTreeModel::ProcessTreeModel(QObject* parent) : QAbstractItemModel(parent) {}
 ProcessTreeModel::~ProcessTreeModel() = default;
 
-// Top-level indexes carry no internal pointer; a child carries its group.
+// Top-level indexes carry no internal pointer; a thread carries its process.
 QModelIndex ProcessTreeModel::index(int row, int column, const QModelIndex& parent) const
 {
     if (row < 0 || column < 0 || column >= Count)
@@ -342,7 +235,7 @@ QModelIndex ProcessTreeModel::index(int row, int column, const QModelIndex& pare
         || parent.row() >= static_cast<int>(m_groups.size()))
         return QModelIndex();
     Group* group = m_groups[static_cast<size_t>(parent.row())].get();
-    return row < group->children.size() ? createIndex(row, column, group) : QModelIndex();
+    return row < group->threads.size() ? createIndex(row, column, group) : QModelIndex();
 }
 
 QModelIndex ProcessTreeModel::parent(const QModelIndex& child) const
@@ -360,7 +253,7 @@ int ProcessTreeModel::rowCount(const QModelIndex& parent) const
     if (parent.internalPointer() != nullptr || parent.column() != 0
         || parent.row() >= static_cast<int>(m_groups.size()))
         return 0;
-    return m_groups[static_cast<size_t>(parent.row())]->children.size();
+    return m_groups[static_cast<size_t>(parent.row())]->threads.size();
 }
 
 int ProcessTreeModel::columnCount(const QModelIndex&) const
@@ -374,13 +267,13 @@ QVariant ProcessTreeModel::data(const QModelIndex& index, int role) const
         return QVariant();
     const Group* group = static_cast<const Group*>(index.internalPointer());
     if (group) {
-        if (index.row() >= group->children.size())
+        if (index.row() >= group->threads.size())
             return QVariant();
-        return procRowData(group->children.at(index.row()), index.column(), role);
+        return procRowData(group->threads.at(index.row()), index.column(), role);
     }
     if (index.row() >= static_cast<int>(m_groups.size()))
         return QVariant();
-    return procRowData(m_groups[static_cast<size_t>(index.row())]->summary, index.column(), role);
+    return procRowData(m_groups[static_cast<size_t>(index.row())]->process, index.column(), role);
 }
 
 QVariant ProcessTreeModel::headerData(int section, Qt::Orientation orientation, int role) const
@@ -398,13 +291,14 @@ void ProcessTreeModel::renumber()
 
 void ProcessTreeModel::setRows(const QVector<ProcRow>& rows)
 {
-    QHash<QString, QVector<int>> byName;  // program name -> indexes into rows
+    QHash<int, int> incoming;  // pid -> index in rows
+    incoming.reserve(rows.size());
     for (int i = 0; i < rows.size(); ++i)
-        byName[rows.at(i).name].append(i);
+        incoming.insert(rows.at(i).pid, i);
 
-    // 1. Programs with no process left.
+    // 1. Processes that exited.
     for (int i = static_cast<int>(m_groups.size()) - 1; i >= 0; --i) {
-        if (byName.contains(m_groups[static_cast<size_t>(i)]->key))
+        if (incoming.contains(m_groups[static_cast<size_t>(i)]->pid))
             continue;
         beginRemoveRows(QModelIndex(), i, i);
         m_groups.erase(m_groups.begin() + i);
@@ -412,60 +306,53 @@ void ProcessTreeModel::setRows(const QVector<ProcRow>& rows)
         endRemoveRows();
     }
 
-    // 2. Programs that are still there: sync their children, refresh the sums.
-    QSet<QString> known;
+    // 2. Processes still there: sync their threads, refresh the figures.
     for (const std::unique_ptr<Group>& holder : m_groups) {
         Group* group = holder.get();
-        known.insert(group->key);
-        const QVector<int> members = byName.value(group->key);
+        const ProcRow& row = rows.at(incoming.take(group->pid));
         const QModelIndex groupIndex = createIndex(group->row, 0);
 
-        QHash<int, int> wanted;  // pid -> index in rows; empty for a single process
-        if (members.size() > 1)
-            for (int idx : members)
-                wanted.insert(rows.at(idx).pid, idx);
-
-        for (int c = group->children.size() - 1; c >= 0; --c) {
-            if (wanted.contains(group->children.at(c).pid))
+        QHash<int, int> wanted;  // tid -> index in row.threadRows
+        for (int t = 0; t < static_cast<int>(row.threadRows.size()); ++t)
+            wanted.insert(row.threadRows[static_cast<size_t>(t)].pid, t);
+        for (int c = group->threads.size() - 1; c >= 0; --c) {
+            if (wanted.contains(group->threads.at(c).pid))
                 continue;
             beginRemoveRows(groupIndex, c, c);
-            group->children.removeAt(c);
+            group->threads.removeAt(c);
             endRemoveRows();
         }
-        for (ProcRow& child : group->children)
-            child = rows.at(wanted.take(child.pid));
+        for (ProcRow& thread : group->threads)
+            thread = row.threadRows[static_cast<size_t>(wanted.take(thread.pid))];
         if (!wanted.isEmpty()) {
-            const int first = group->children.size();
+            const int first = group->threads.size();
             beginInsertRows(groupIndex, first, first + wanted.size() - 1);
             for (auto it = wanted.constBegin(); it != wanted.constEnd(); ++it)
-                group->children.append(rows.at(it.value()));
+                group->threads.append(row.threadRows[static_cast<size_t>(it.value())]);
             endInsertRows();
         }
-        group->summary = summarize(group->key, members, rows);
-        if (!group->children.isEmpty())
-            emit dataChanged(index(0, 0, groupIndex), index(group->children.size() - 1, Count - 1, groupIndex));
+        group->process = row;
+        group->process.threadRows.clear();
+        if (!group->threads.isEmpty())
+            emit dataChanged(index(0, 0, groupIndex), index(group->threads.size() - 1, Count - 1, groupIndex));
     }
     if (!m_groups.empty())
         emit dataChanged(index(0, 0), index(static_cast<int>(m_groups.size()) - 1, Count - 1));
 
-    // 3. Programs seen for the first time, inserted complete with children.
-    QStringList fresh;
-    for (auto it = byName.constBegin(); it != byName.constEnd(); ++it)
-        if (!known.contains(it.key()))
-            fresh.append(it.key());
-    if (fresh.isEmpty())
+    // 3. New processes, inserted with their threads; the proxy sorts them in.
+    if (incoming.isEmpty())
         return;
     const int first = static_cast<int>(m_groups.size());
-    beginInsertRows(QModelIndex(), first, first + fresh.size() - 1);
-    for (const QString& key : std::as_const(fresh)) {
+    beginInsertRows(QModelIndex(), first, first + incoming.size() - 1);
+    for (auto it = incoming.constBegin(); it != incoming.constEnd(); ++it) {
+        const ProcRow& row = rows.at(it.value());
         auto group = std::make_unique<Group>();
-        group->key = key;
+        group->pid = row.pid;
         group->row = static_cast<int>(m_groups.size());
-        const QVector<int> members = byName.value(key);
-        if (members.size() > 1)
-            for (int idx : members)
-                group->children.append(rows.at(idx));
-        group->summary = summarize(key, members, rows);
+        for (const ProcRow& thread : row.threadRows)
+            group->threads.append(thread);
+        group->process = row;
+        group->process.threadRows.clear();
         m_groups.push_back(std::move(group));
     }
     endInsertRows();
@@ -514,10 +401,19 @@ bool RowSortProxy::lessThan(const QModelIndex& left, const QModelIndex& right) c
     return left.data(TieBreakRole).toInt() < right.data(TieBreakRole).toInt();
 }
 
+// A row is shown if it matches, if one of its threads does (recursive
+// filtering), or if its process does, so that a matching process keeps its
+// threads.
 bool RowSortProxy::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const
 {
     if (m_filter.isEmpty())
         return true;
+    return matches(sourceRow, sourceParent)
+        || (sourceParent.isValid() && matches(sourceParent.row(), sourceParent.parent()));
+}
+
+bool RowSortProxy::matches(int sourceRow, const QModelIndex& sourceParent) const
+{
     const QAbstractItemModel* model = sourceModel();
     for (int column : m_columns) {
         const QString text = model->index(sourceRow, column, sourceParent).data(Qt::DisplayRole).toString();

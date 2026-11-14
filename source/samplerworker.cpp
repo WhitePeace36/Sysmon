@@ -9,6 +9,7 @@ SamplerWorker::~SamplerWorker() = default;
 void SamplerWorker::start()
 {
     m_sampler = std::make_unique<sys::Sampler>();
+    m_sampler->setCollectThreads(m_collectThreads);
     m_timer = new QTimer(this);
     connect(m_timer, &QTimer::timeout, this, &SamplerWorker::tick);
     m_timer->start(m_intervalMs);
@@ -24,6 +25,13 @@ void SamplerWorker::setInterval(int intervalMs)
     m_intervalMs = intervalMs;
     if (m_timer)
         m_timer->start(m_intervalMs);
+}
+
+void SamplerWorker::setCollectThreads(bool on)
+{
+    m_collectThreads = on;
+    if (m_sampler)
+        m_sampler->setCollectThreads(on);
 }
 
 void SamplerWorker::tick()

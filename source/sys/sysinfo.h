@@ -112,6 +112,15 @@ struct Sensor {
     double value = 0;  // degrees Celsius or RPM
 };
 
+struct ThreadStats {
+    int tid = 0;
+    std::string name;   // the thread's own name (comm)
+    char state = '?';
+    double cpuPct = 0;  // 100 = one full core
+    int nice = 0;
+    int priority = 0;
+    int policy = 0;
+};
 struct ProcStats {
     int pid = 0, ppid = 0;
     std::string name;     // executable name
@@ -132,6 +141,8 @@ struct ProcStats {
     int priority = 0;   // kernel priority as shown by top's PR column
     int policy = 0;     // SCHED_* constant
     int threads = 0;
+
+    std::vector<ThreadStats> threadList;  // only while collecting threads, and only with more than one
 };
 
 struct Snapshot {
@@ -156,6 +167,10 @@ public:
     // Rates are computed against the previous call, so the first snapshot
     // reports zero for every rate.
     std::shared_ptr<Snapshot> sample();
+
+    // Per-thread figures (ProcStats::threadList) cost a file read per thread,
+    // so they are only collected while someone looks at them. Off by default.
+    void setCollectThreads(bool on);
 
 private:
     struct Impl;

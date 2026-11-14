@@ -100,7 +100,7 @@ void runAsAdministrator(QWidget* parent, const QString& question, const QStringL
 
 }  // namespace
 
-ProcessTab::ProcessTab(Mode mode, QWidget* parent) : QWidget(parent), m_mode(mode)
+ProcessTab::ProcessTab(QWidget* parent) : QWidget(parent)
 {
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(6, 6, 6, 6);
@@ -117,14 +117,8 @@ ProcessTab::ProcessTab(Mode mode, QWidget* parent) : QWidget(parent), m_mode(mod
 
     m_proxy = new RowSortProxy(this);
     m_proxy->setFilterColumns({ProcColumns::Name, ProcColumns::Pid, ProcColumns::User, ProcColumns::Command});
-    if (mode == Grouped) {
-        m_tree = new ProcessTreeModel(this);
-        m_proxy->setSourceModel(m_tree);
-    } else {
-        m_table = new ProcessTableModel(this);
-        m_proxy->setSourceModel(m_table);
-        m_view->setRootIsDecorated(false);
-    }
+    m_tree = new ProcessTreeModel(this);
+    m_proxy->setSourceModel(m_tree);
     m_view->setModel(m_proxy);
     root->addWidget(m_view, 1);
 
@@ -133,25 +127,20 @@ ProcessTab::ProcessTab(Mode mode, QWidget* parent) : QWidget(parent), m_mode(mod
     // their width back without showing them, which leaves empty gaps between
     // the visible columns (seen with Qt 5.15 and Qt 6).
     QHeaderView* header = m_view->header();
-    header->setStretchLastSection(mode == Flat);
+    header->setStretchLastSection(true);
     header->setSectionsMovable(true);
     header->setContextMenuPolicy(Qt::CustomContextMenu);
 
     // Columns shown by default; the rest is one right-click on the header away.
     using namespace ProcColumns;
-    const QSet<int> visible = mode == Grouped
-        ? QSet<int>{Name, Pid, User, Cpu, Gpu, Memory, Network, Disk}
-        : QSet<int>{Name, Pid, User, Cpu, Gpu, Memory, Network, Disk, Nice, Priority, Sched, Command};
+    const QSet<int> visible{Name, Pid, User, Cpu, Gpu, Memory, Network, Disk, Nice, Priority, Sched, Command};
     for (int c = 0; c < Count; ++c)
         m_view->setColumnHidden(c, !visible.contains(c));
 
-    m_view->setColumnWidth(Name, mode == Grouped ? 280 : 200);
+    m_view->setColumnWidth(Name, 200);
     m_view->setColumnWidth(Pid, 80);
     m_view->setColumnWidth(Command, 400);
-    if (mode == Grouped)
-        m_view->sortByColumn(Cpu, Qt::DescendingOrder);
-    else
-        m_view->sortByColumn(Name, Qt::AscendingOrder);
+    m_view->sortByColumn(Name, Qt::AscendingOrder);
 
     connect(m_filter, &QLineEdit::textChanged, m_proxy, &RowSortProxy::setFilterText);
     connect(m_view, &TypeAheadView::deletePressed, this, &ProcessTab::killSelected);
@@ -168,37 +157,29 @@ ProcessTab::ProcessTab(Mode mode, QWidget* parent) : QWidget(parent), m_mode(mod
 
 void ProcessTab::setRows(const QVector<ProcRow>& rows)
 {
-    if (m_tree)
-        m_tree->setRows(rows);
-    else
-        m_table->setRows(rows);
-}
-
-QString ProcessTab::settingsKey() const
-{
-    return m_mode == Grouped ? QStringLiteral("processes/header-v2") : QStringLiteral("details/header-v2");
+    m_tree->setRows(rows);
 }
 
 void ProcessTab::saveState(QSettings& settings) const
 {
-    settings.setValue(settingsKey(), m_view->header()->saveState());
+    settings.setValue(QStringLiteral("details/header-v2"), m_view->header()->saveState());
 }
 
 void ProcessTab::restoreState(QSettings& settings)
 {
-    QByteArray state = settings.value(settingsKey()).toByteArray();
+    QByteArray state = settings.value(QStringLiteral("details/header-v2")).toByteArray();
 
-    // Layouts saved by the first version: the Processes one may contain the
-    // column gaps and is dropped. The Details one is fine and is carried
-    // over, minus the State column, which is no longer shown by default.
-    const QString oldProcesses = QStringLiteral("processes/header-v1");
+    // The layout of the first version is carried over, minus the State
+    // column, which is no longer shown by default. Layouts of the Processes
+    // tab of earlier versions, which grouped processes by name, are dropped.
     const QString oldDetails = QStringLiteral("details/header-v1");
     bool carriedOver = false;
-    if (state.isEmpty() && m_mode == Flat) {
+    if (state.isEmpty()) {
         state = settings.value(oldDetails).toByteArray();
         carriedOver = !state.isEmpty();
     }
-    settings.remove(m_mode == Grouped ? oldProcesses : oldDetails);
+    for (const char* key : {"details/header-v1", "processes/header-v1", "processes/header-v2"})
+        settings.remove(QString::fromLatin1(key));
 
     QHeaderView* header = m_view->header();
     if (!state.isEmpty() && header->restoreState(state))
@@ -208,8 +189,8 @@ void ProcessTab::restoreState(QSettings& settings)
     m_view->setColumnHidden(ProcColumns::Name, false);
 }
 
-// The processes behind the selected rows. Selecting a program row means all
-// of its processes.
+// The processes behind the selected rows. Thread rows carry no PIDs, as
+// signals go to a whole process.
 ProcessTab::Target ProcessTab::selection() const
 {
     Target target;

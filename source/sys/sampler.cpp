@@ -222,6 +222,7 @@ struct Sampler::Impl {
 
     ProcScanner procs;
     GpuMonitor gpu;
+    bool collectThreads = false;
 
     void initCpu();
     void sampleCpu(CpuStats& c);
@@ -738,6 +739,11 @@ Sampler::Sampler() : d(new Impl)
 
 Sampler::~Sampler() = default;
 
+void Sampler::setCollectThreads(bool on)
+{
+    d->collectThreads = on;
+}
+
 std::shared_ptr<Snapshot> Sampler::sample()
 {
     auto snap = std::make_shared<Snapshot>();
@@ -758,7 +764,7 @@ std::shared_ptr<Snapshot> Sampler::sample()
     d->sampleSensors(*snap);
     snap->mounts = d->mounts;
 
-    d->procs.scan(dt, d->gpu.wantsFdinfo(), snap->procs);
+    d->procs.scan(dt, d->gpu.wantsFdinfo(), d->collectThreads, snap->procs);
     d->gpu.sample(d->procs.drmUsageByPdev(), snap->gpus);
 
     const auto& gpuUse = d->gpu.processUse();

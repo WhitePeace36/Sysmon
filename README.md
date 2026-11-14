@@ -81,19 +81,17 @@ A device list on the left, graphs and figures for the selected device on the rig
 
 Disks, adapters and GPUs appear and disappear as they are plugged in.
 
-### Processes
-
-Programs grouped by name with their summed CPU, GPU, memory, network and disk
-use. A program with several processes can be expanded.
-
 ### Details
 
-One row per PID with the same columns plus nice, PRIO, scheduler and the full
-command line.
+One row per PID with name, PID, user, CPU, GPU, memory, network, disk, nice,
+PRIO, scheduler and the full command line. A process with several threads
+can be expanded to list them, each with its name, TID, state, CPU, nice,
+PRIO and scheduler. Threads are only read while this tab is open.
 
-### Both process tabs
+### Working with processes
 
 - **Del** kills the selection with SIGKILL (asks first; can be turned off in *View*).
+  Thread rows have no actions: a signal always goes to the whole process.
 - **Right-click > Send Signal** lists every signal. Choose SIGTERM there to
   ask a process to quit. Real-time signals are in a submenu.
 - Right-click also offers *Change Priority* (nice) and copy PID / command line.
@@ -158,7 +156,8 @@ cmake --build build --target sysmon-dump
 ./build/sysmon-dump 3
 ```
 
-prints three samples of everything the backend reads. Add
+prints three samples of everything the backend reads, including the threads
+of the process with the most of them. Add
 `-DSYSMON_BUILD_GUI=OFF` to build only this tool, without Qt.
 
 ## Layout
@@ -171,8 +170,8 @@ source/sys/         backend, plain C++ without Qt
 source/             Qt interface
   graphwidget       scrolling line graph
   performancetab    device list and pages
-  processmodel      models for Processes and Details, sorting and filtering
-  processtab        the two process tabs, signals, priorities
+  processmodel      model for Details, sorting and filtering
+  processtab        the Details tab, signals, priorities
   typeaheadview     list view with type-ahead and Del
   servicestab       systemd services
   samplerworker     runs the backend on its own thread

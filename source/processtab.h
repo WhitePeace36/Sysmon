@@ -1,5 +1,4 @@
-// The Processes tab (Grouped: programs with their processes underneath) and
-// the Details tab (Flat: every PID). Same widget, two modes.
+// The Details tab: every process, expandable to its threads.
 //
 // Del kills the selection (SIGKILL). Any other signal, including the polite
 // SIGTERM, is sent through the context menu: Send Signal > ...
@@ -21,9 +20,7 @@ class ProcessTab : public QWidget {
     Q_OBJECT
 
 public:
-    enum Mode { Grouped, Flat };
-
-    explicit ProcessTab(Mode mode, QWidget* parent = nullptr);
+    explicit ProcessTab(QWidget* parent = nullptr);
 
     void setRows(const QVector<ProcRow>& rows);
     void setConfirmKill(bool confirm) { m_confirmKill = confirm; }
@@ -45,13 +42,9 @@ private:
     Target selection() const;
     void deliver(const QVector<int>& pids, int signo);
     void renice(const QVector<int>& pids, int niceValue);
-    QString settingsKey() const;
-
-    Mode m_mode;
     bool m_confirmKill = true;
     QLineEdit* m_filter = nullptr;
     TypeAheadView* m_view = nullptr;
-    ProcessTableModel* m_table = nullptr;
     ProcessTreeModel* m_tree = nullptr;
     RowSortProxy* m_proxy = nullptr;
 };

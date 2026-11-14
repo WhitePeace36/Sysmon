@@ -17,6 +17,7 @@
 #include <QMessageBox>
 #include <QSettings>
 #include <QStatusBar>
+#include <QTabBar>
 #include <QTabWidget>
 
 MainWindow::MainWindow()
@@ -28,12 +29,14 @@ MainWindow::MainWindow()
     m_intervalMs = qBound(250, settings.value(QStringLiteral("updateIntervalMs"), 1000).toInt(), 10000);
 
     m_tabs = new QTabWidget;
+    // A tab bar that takes keyboard focus gets an underline under the
+    // current tab's title from some styles (Breeze). Tabs are still switched
+    // with the mouse, Ctrl+Tab and Ctrl+PgUp/PgDown.
+    m_tabs->tabBar()->setFocusPolicy(Qt::NoFocus);
     m_performance = new PerformanceTab;
-    m_processes = new ProcessTab(ProcessTab::Grouped);
-    m_details = new ProcessTab(ProcessTab::Flat);
+    m_details = new ProcessTab;
     m_services = new ServicesTab;
     m_tabs->addTab(m_performance, tr("Performance"));
-    m_tabs->addTab(m_processes, tr("Processes"));
     m_tabs->addTab(m_details, tr("Details"));
     m_tabs->addTab(m_services, tr("Services"));
     setCentralWidget(m_tabs);
@@ -43,16 +46,26 @@ MainWindow::MainWindow()
 
     buildMenus();
 
-    m_processes->restoreState(settings);
     m_details->restoreState(settings);
     m_services->restoreState(settings);
     restoreGeometry(settings.value(QStringLiteral("window/geometry")).toByteArray());
-    m_tabs->setCurrentIndex(qBound(0, settings.value(QStringLiteral("window/tab"), 0).toInt(), m_tabs->count() - 1));
+
+    // Earlier versions saved the index among Performance, Processes, Details
+    // and Services; Processes is gone.
+    int tab = settings.value(QStringLiteral("window/tab-v2"), -1).toInt();
+    if (tab < 0) {
+        static const int fromOld[] = {0, 1, 1, 2};
+        const int old = settings.value(QStringLiteral("window/tab"), 0).toInt();
+        tab = old >= 0 && old < 4 ? fromOld[old] : 0;
+        settings.remove(QStringLiteral("window/tab"));
+    }
+    m_tabs->setCurrentIndex(qBound(0, tab, m_tabs->count() - 1));
     connect(m_tabs, &QTabWidget::currentChanged, this, &MainWindow::onTabChanged);
 
     // Sampling happens on a worker thread; snapshots arrive through a queued
     // signal and are only ever read from here on.
     m_worker = new SamplerWorker(m_intervalMs);
+    m_worker->setCollectThreads(m_tabs->currentWidget() == m_details);
     m_worker->moveToThread(&m_thread);
     connect(&m_thread, &QThread::started, m_worker, &SamplerWorker::start);
     connect(&m_thread, &QThread::finished, m_worker, &QObject::deleteLater);
@@ -108,7 +121,6 @@ void MainWindow::buildMenus()
     m_confirmKill->setCheckable(true);
     m_confirmKill->setChecked(settings.value(QStringLiteral("confirmKill"), true).toBool());
     const auto applyConfirm = [this] {
-        m_processes->setConfirmKill(m_confirmKill->isChecked());
         m_details->setConfirmKill(m_confirmKill->isChecked());
     };
     connect(m_confirmKill, &QAction::toggled, this, applyConfirm);
@@ -119,9 +131,10 @@ void MainWindow::buildMenus()
     connect(keys, &QAction::triggered, this, [this] {
         QMessageBox::information(
             this, tr("Keys and tips"),
-            tr("<p><b>Processes and Details</b></p>"
+            tr("<p><b>Details</b></p>"
                "<ul>"
                "<li><b>Del</b> kills the selected process (SIGKILL).</li>"
+               "<li>Expand a process to see its threads.</li>"
                "<li>Right-click &gt; <b>Send Signal</b> lists every signal; pick SIGTERM to ask a process to quit.</li>"
                "<li>Click a row and type: the selection jumps to the first name that matches.</li>"
                "<li>Click a column header to sort; right-click the header to choose columns.</li>"
@@ -165,15 +178,18 @@ void MainWindow::refreshProcessTabs()
     if (!m_latest)
         return;
     QWidget* current = m_tabs->currentWidget();
-    if (current != m_processes && current != m_details)
+    if (current != m_details)
         return;
     const QVector<ProcRow> rows =
         ProcRow::fromSnapshot(*m_latest, m_showKernelThreads->isChecked(), m_perCoreCpu->isChecked());
-    static_cast<ProcessTab*>(current)->setRows(rows);
+    m_details->setRows(rows);
 }
 
+// Threads are read only while the Details tab, which lists them, is open.
 void MainWindow::onTabChanged()
 {
+    QMetaObject::invokeMethod(m_worker, "setCollectThreads", Qt::QueuedConnection,
+                              Q_ARG(bool, m_tabs->currentWidget() == m_details));
     refreshProcessTabs();
 }
 
@@ -181,12 +197,11 @@ void MainWindow::saveSettings()
 {
     QSettings settings;
     settings.setValue(QStringLiteral("window/geometry"), saveGeometry());
-    settings.setValue(QStringLiteral("window/tab"), m_tabs->currentIndex());
+    settings.setValue(QStringLiteral("window/tab-v2"), m_tabs->currentIndex());
     settings.setValue(QStringLiteral("updateIntervalMs"), m_intervalMs);
     settings.setValue(QStringLiteral("showKernelThreads"), m_showKernelThreads->isChecked());
     settings.setValue(QStringLiteral("perCoreCpu"), m_perCoreCpu->isChecked());
     settings.setValue(QStringLiteral("confirmKill"), m_confirmKill->isChecked());
-    m_processes->saveState(settings);
     m_details->saveState(settings);
     m_services->saveState(settings);
 }

@@ -1,6 +1,7 @@
 // Process table.
 //
 // Cheap, every sample: /proc/<pid>/{stat,statm,io,cmdline}.
+// On request, /proc/<pid>/task/<tid>/stat for every thread.
 // Expensive, at most every two seconds: the open file descriptors of every
 // process we may inspect. Those give us
 //   * the sockets a process holds, matched against the kernel's per-socket
@@ -57,6 +58,8 @@ struct PidState {
     bool ioOk = false;
     bool ioDenied = false;  // /proc/<pid>/io could not be read last time
     uint64_t ioRead = 0, ioWrite = 0;
+
+    std::unordered_map<int, std::pair<uint64_t, uint64_t>> threadTicks;  // tid -> start, CPU ticks
 
     std::string comm, name, cmdline, user;
     int refreshIn = 0;
@@ -288,6 +291,7 @@ struct ProcScanner::Impl {
 
     const std::string& userName(unsigned uid);
     bool readProcess(int pid, double dt, ProcStats& p, PidState*& stateOut);
+    void readThreads(int pid, double dt, PidState& st, std::vector<ThreadStats>& out);
     void refreshIdentity(int pid, PidState& st);
     void collectSocketDeltas(std::unordered_map<uint32_t, SockCount>& deltas);
     void scanFds(int pid, PidState& st, double dt, bool wantDrm,
@@ -422,6 +426,44 @@ bool ProcScanner::Impl::readProcess(int pid, double dt, ProcStats& p, PidState*&
     return true;
 }
 
+void ProcScanner::Impl::readThreads(int pid, double dt, PidState& st, std::vector<ThreadStats>& out)
+{
+    char path[64];
+    std::snprintf(path, sizeof path, "/proc/%d/task", pid);
+    DIR* dir = ::opendir(path);
+    if (!dir) {
+        st.threadTicks.clear();
+        return;
+    }
+    std::unordered_map<int, std::pair<uint64_t, uint64_t>> ticks;
+    std::string text;
+    while (const dirent* e = ::readdir(dir)) {
+        if (e->d_name[0] < '0' || e->d_name[0] > '9')
+            continue;
+        const int tid = std::atoi(e->d_name);
+        std::snprintf(path, sizeof path, "/proc/%d/task/%d/stat", pid, tid);
+        StatFields f;
+        if (!readFile(path, text, 4096) || !parseStat(text, f))
+            continue;
+        ThreadStats t;
+        t.tid = tid;
+        t.name = f.comm;
+        t.state = f.state;
+        t.nice = static_cast<int>(f.nice);
+        t.priority = static_cast<int>(f.priority);
+        t.policy = f.policy;
+        const uint64_t now = f.utime + f.stime;
+        const auto prev = st.threadTicks.find(tid);
+        if (prev != st.threadTicks.end() && prev->second.first == f.start && now >= prev->second.second && dt > 0
+            && clkTck > 0)
+            t.cpuPct = double(now - prev->second.second) / double(clkTck) / dt * 100.0;
+        ticks.emplace(tid, std::make_pair(f.start, now));
+        out.push_back(std::move(t));
+    }
+    ::closedir(dir);
+    st.threadTicks.swap(ticks);
+}
+
 void ProcScanner::Impl::collectSocketDeltas(std::unordered_map<uint32_t, SockCount>& deltas)
 {
     std::unordered_map<uint32_t, SockCount> current;
@@ -554,7 +596,7 @@ const std::map<std::string, double>& ProcScanner::drmUsageByPdev() const
     return d->pdevUsage;
 }
 
-void ProcScanner::scan(double dt, bool wantDrm, std::vector<ProcStats>& out)
+void ProcScanner::scan(double dt, bool wantDrm, bool wantThreads, std::vector<ProcStats>& out)
 {
     const Clock::time_point now = Clock::now();
     const double sinceHeavy = d->heavyDone ? std::chrono::duration<double>(now - d->lastHeavy).count() : 0.0;
@@ -580,6 +622,10 @@ void ProcScanner::scan(double dt, bool wantDrm, std::vector<ProcStats>& out)
         PidState* st = nullptr;
         if (!d->readProcess(pid, dt, p, st))
             continue;
+        if (wantThreads && p.threads > 1 && !p.kernelThread)
+            d->readThreads(pid, dt, *st, p.threadList);
+        else
+            st->threadTicks.clear();
         if (heavy) {
             if (p.kernelThread)
                 st->fdOk = false;

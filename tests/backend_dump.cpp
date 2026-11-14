@@ -79,12 +79,26 @@ static void print(const Snapshot& s)
                     p.name.c_str(), p.user.c_str(), p.state, p.cpuPct, p.memBytes / 1048576.0, p.netRxBps,
                     p.netTxBps, p.diskReadBps, p.diskWriteBps, p.nice, p.priority, p.policy, p.cmdline.c_str());
     }
+
+    const ProcStats* busiest = nullptr;  // the process with the most threads
+    for (const ProcStats& p : s.procs)
+        if (!busiest || p.threadList.size() > busiest->threadList.size())
+            busiest = &p;
+    if (busiest && !busiest->threadList.empty()) {
+        std::printf("THREADS of %d %s (%zu):\n", busiest->pid, busiest->name.c_str(), busiest->threadList.size());
+        for (size_t i = 0; i < busiest->threadList.size() && i < 6; ++i) {
+            const ThreadStats& t = busiest->threadList[i];
+            std::printf("  %7d %-16s %c %6.1f%% nice %d prio %d\n", t.tid, t.name.c_str(), t.state, t.cpuPct, t.nice,
+                        t.priority);
+        }
+    }
 }
 
 int main(int argc, char** argv)
 {
     const int samples = argc > 1 ? std::atoi(argv[1]) : 3;
     Sampler sampler;
+    sampler.setCollectThreads(true);
     for (int i = 0; i < samples; ++i) {
         if (i)
             std::this_thread::sleep_for(std::chrono::seconds(1));

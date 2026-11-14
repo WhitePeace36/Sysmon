@@ -24,6 +24,7 @@ public:
 public slots:
     void start();                    // call once, on the worker thread
     void setInterval(int intervalMs);
+    void setCollectThreads(bool on);
 
 signals:
     void sampled(SnapshotPtr snapshot);
@@ -33,6 +34,7 @@ private slots:
 
 private:
     int m_intervalMs;
+    bool m_collectThreads = false;
     QTimer* m_timer = nullptr;
     std::unique_ptr<sys::Sampler> m_sampler;
 };

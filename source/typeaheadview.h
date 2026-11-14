@@ -1,4 +1,4 @@
-// Tree/list view shared by the Processes, Details and Services tabs.
+// Tree/list view shared by the Details and Services tabs.
 //
 // Type-ahead: click a row, start typing, and the selection jumps to the first
 // row (top to bottom, in the current sort order) whose name starts with what

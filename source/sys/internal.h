@@ -24,7 +24,7 @@ public:
     ProcScanner();
     ~ProcScanner();
 
-    void scan(double dt, bool wantDrm, std::vector<ProcStats>& out);
+    void scan(double dt, bool wantDrm, bool wantThreads, std::vector<ProcStats>& out);
 
     // GPU load per PCI device, summed from the DRM fdinfo of all processes
     // that could be read. Keyed by PCI address ("0000:00:02.0").

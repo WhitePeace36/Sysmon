@@ -35,7 +35,6 @@ private:
 
     QTabWidget* m_tabs = nullptr;
     PerformanceTab* m_performance = nullptr;
-    ProcessTab* m_processes = nullptr;
     ProcessTab* m_details = nullptr;
     ServicesTab* m_services = nullptr;
     QLabel* m_statusText = nullptr;
